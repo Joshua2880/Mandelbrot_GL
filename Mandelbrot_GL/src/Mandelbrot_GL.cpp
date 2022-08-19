@@ -1,10 +1,17 @@
-
+﻿
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include "glm/gtc/type_ptr.hpp"
+
+extern "C"
+{
+    __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+}
 
 std::string FileToString(std::string path)
 {
@@ -20,9 +27,28 @@ std::string FileToString(std::string path)
     return ss.str();
 }
 
+glm::vec2 dims = {800.0, 600.0};
+float aspect_ratio;
+float zoom{ -1.0f };
+glm::vec2 centre{ 0.0f, 0.0f };
+
 void FramebufferSizeCallback(GLFWwindow *window, int width, int height)
 {
-    
+    glViewport(0, 0, width, height);
+    dims = { width, height };
+    aspect_ratio = dims.x / dims.y;
+}
+
+void ScrollCallback(GLFWwindow *window, double d_x, double d_y)
+{
+    glm::vec<2, double> mouse_pos{};
+    glfwGetCursorPos(window, &mouse_pos.x, &mouse_pos.y);
+
+    float new_zoom = zoom + static_cast<float>(d_y);
+
+    centre += (powf(2.0f, -zoom) - powf(2.0f, -new_zoom)) * (2.0f / dims.y * glm::vec2(mouse_pos.x, -mouse_pos.y) - glm::vec2(aspect_ratio, -1.0f));
+
+    zoom = new_zoom;
 }
 
 int main()
@@ -47,6 +73,7 @@ int main()
 
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+    glfwSetScrollCallback(window, ScrollCallback);
 
     if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
     {
@@ -55,7 +82,13 @@ int main()
         return -1;
     }
 
-    glViewport(0, 0, 800, 600);
+    uint8_t const *vendor = glGetString(GL_VENDOR);
+    uint8_t const *renderer = glGetString(GL_RENDERER);
+
+    std::cout << vendor << " : " << renderer << std::endl;
+
+    glViewport(0, 0, static_cast<int32_t>(dims.x), static_cast<int32_t>(dims.y));
+    aspect_ratio = dims.x / dims.y;
 
     int32_t success;
     char info_log[512];
@@ -107,10 +140,10 @@ int main()
     glDeleteShader(f_shader);
 
     float constexpr vertices[]{
-         0.5f,  0.5f,
-         0.5f, -0.5f,
-        -0.5f, -0.5f,
-        -0.5f,  0.5f
+         1.0f,  1.0f,
+         1.0f, -1.0f,
+        -1.0f, -1.0f,
+        -1.0f,  1.0f
     };
 
     uint32_t constexpr indices[]{
@@ -141,6 +174,10 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         glUseProgram(shader);
+        
+        glUniform1f(glGetUniformLocation(shader, "u_aspect_ratio"), aspect_ratio);
+        glUniform1f(glGetUniformLocation(shader, "u_zoom"), zoom);
+        glUniform2fv(glGetUniformLocation(shader, "u_centre"), 1, glm::value_ptr(centre));
 
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);

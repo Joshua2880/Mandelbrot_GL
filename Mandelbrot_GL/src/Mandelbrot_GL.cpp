@@ -8,6 +8,12 @@
 #include <glm/glm.hpp>
 #include "glm/gtc/type_ptr.hpp"
 
+#ifdef M_DOUBLE
+    #define MGL_FLOAT double
+#else 
+    #define MGL_FLOAT float
+#endif
+
 extern "C"
 {
     __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
@@ -28,10 +34,16 @@ std::string FileToString(std::string path)
     return ss.str();
 }
 
-glm::vec2 dims = {800.0, 600.0};
-float aspect_ratio;
-float zoom{ -1.0f };
+#ifdef M_DOUBLE
+glm::vec<2, double> dims = {800.0, 600.0};
+glm::vec<2, double> centre{ 0.0, 0.0 };
+double zoom{ -1.0 };
+#else
+glm::vec2 dims = { 800.0f, 600.0f };
 glm::vec2 centre{ 0.0f, 0.0f };
+float zoom{ -1.0f };
+#endif
+MGL_FLOAT aspect_ratio;
 
 void FramebufferSizeCallback(GLFWwindow *window, int width, int height)
 {
@@ -45,9 +57,15 @@ void ScrollCallback(GLFWwindow *window, double d_x, double d_y)
     glm::vec<2, double> mouse_pos{};
     glfwGetCursorPos(window, &mouse_pos.x, &mouse_pos.y);
 
-    float new_zoom = zoom + static_cast<float>(d_y);
+    MGL_FLOAT new_zoom = zoom + static_cast<MGL_FLOAT>(d_y);
 
+#ifdef M_DOUBLE
+    centre += (pow(2.0, -zoom) - pow(2.0, -new_zoom)) * (2.0 / dims.y * glm::vec<2, double>(mouse_pos.x, -mouse_pos.y) - glm::vec<2, double>(aspect_ratio, -1.0));
+
+#else
     centre += (powf(2.0f, -zoom) - powf(2.0f, -new_zoom)) * (2.0f / dims.y * glm::vec2(mouse_pos.x, -mouse_pos.y) - glm::vec2(aspect_ratio, -1.0f));
+
+#endif
 
     zoom = new_zoom;
 }
@@ -61,7 +79,7 @@ int main()
     }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow *window = glfwCreateWindow(800, 600, "Mandelbrot GL", nullptr, nullptr);
@@ -109,7 +127,12 @@ int main()
         std::cout << "error: couldn't compile vertex shader\n" << info_log << std::endl;
     }
 
+#ifdef M_DOUBLE
+    std::string f_shader_source = FileToString("res/shaders/mandelbrot_d.frag");
+#else
     std::string f_shader_source = FileToString("res/shaders/mandelbrot.frag");
+#endif
+
     char const *f_shader_source_cstr = f_shader_source.c_str();
 
     uint32_t f_shader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -176,9 +199,15 @@ int main()
 
         glUseProgram(shader);
         
+#ifdef M_DOUBLE
+        glUniform1d(glGetUniformLocation(shader, "u_aspect_ratio"), aspect_ratio);
+        glUniform1d(glGetUniformLocation(shader, "u_zoom"), pow(2.0, -zoom));
+        glUniform2dv(glGetUniformLocation(shader, "u_centre"), 1, glm::value_ptr(centre));
+#else
         glUniform1f(glGetUniformLocation(shader, "u_aspect_ratio"), aspect_ratio);
         glUniform1f(glGetUniformLocation(shader, "u_zoom"), zoom);
         glUniform2fv(glGetUniformLocation(shader, "u_centre"), 1, glm::value_ptr(centre));
+#endif
 
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);

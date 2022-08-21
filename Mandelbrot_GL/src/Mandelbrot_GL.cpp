@@ -44,6 +44,8 @@ glm::vec2 centre{ 0.0f, 0.0f };
 float zoom{ -1.0f };
 #endif
 MGL_FLOAT aspect_ratio;
+bool mouse_down;
+glm::vec<2, double> last_cursor_pos;
 
 void FramebufferSizeCallback(GLFWwindow *window, int width, int height)
 {
@@ -61,14 +63,34 @@ void ScrollCallback(GLFWwindow *window, double d_x, double d_y)
 
 #ifdef M_DOUBLE
     centre += (pow(2.0, -zoom) - pow(2.0, -new_zoom)) * (2.0 / dims.y * glm::vec<2, double>(mouse_pos.x, -mouse_pos.y) - glm::vec<2, double>(aspect_ratio, -1.0));
-
 #else
     centre += (powf(2.0f, -zoom) - powf(2.0f, -new_zoom)) * (2.0f / dims.y * glm::vec2(mouse_pos.x, -mouse_pos.y) - glm::vec2(aspect_ratio, -1.0f));
-
 #endif
 
     zoom = new_zoom;
 }
+
+void MouseButtonCallback(GLFWwindow *window, int32_t button, int32_t action, int32_t mods)
+{
+    mouse_down = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    if (mouse_down) glfwGetCursorPos(window, &last_cursor_pos.x, &last_cursor_pos.y);
+}
+
+void CursorPosCallback(GLFWwindow *window, double x, double y)
+{
+    if (mouse_down)
+    {
+#ifdef M_DOUBLE
+        centre -= pow(2.0, 1.0 - zoom) / dims.y * glm::vec<2, double>(x - last_cursor_pos.x, last_cursor_pos.y - y);
+#else
+        centre -= powf(2.0f, 1.0f - zoom) / dims.y * glm::vec2(x - last_cursor_pos.x, last_cursor_pos.y - y);
+#endif
+    }
+
+    last_cursor_pos = { x, y };
+}
+
+
 
 int main()
 {
@@ -93,6 +115,8 @@ int main()
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
     glfwSetScrollCallback(window, ScrollCallback);
+    glfwSetMouseButtonCallback(window, MouseButtonCallback);
+    glfwSetCursorPosCallback(window, CursorPosCallback);
 
     if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
     {
